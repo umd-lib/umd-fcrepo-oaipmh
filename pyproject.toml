@@ -1,0 +1,8 @@
+[project]
+name = "umd-fcrepo-oaipmh"
+version = "1.0.0dev"
+dependencies = [
+    "flask",
+    "oai-repo",
+    "python-dotenv",
+]
