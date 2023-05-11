@@ -16,6 +16,19 @@ EARLIEST_DATESTAMP = os.environ.get('EARLIEST_DATESTAMP')
 OAI_REPOSITORY_NAME = os.environ.get('OAI_REPOSITORY_NAME')
 REPORT_DELETED_RECORDS = os.environ.get('REPORT_DELETED_RECORDS', 'no')
 
+METADATA_FORMATS = {
+    'oai_dc': MetadataFormat(
+        metadata_prefix='oai_dc',
+        schema='http://www.openarchives.org/OAI/2.0/oai_dc.xsd',
+        metadata_namespace='http://www.openarchives.org/OAI/2.0/oai_dc/',
+    ),
+    'rdf': MetadataFormat(
+        metadata_prefix='rdf',
+        schema='http://www.openarchives.org/OAI/2.0/rdf.xsd',
+        metadata_namespace='http://www.openarchives.org/OAI/2.0/rdf/',
+    ),
+}
+
 
 class DataProvider(DataInterface):
     def get_identify(self) -> Identify:
@@ -32,7 +45,7 @@ class DataProvider(DataInterface):
         pass
 
     def get_metadata_formats(self, identifier: str | None = None) -> list[MetadataFormat]:
-        pass
+        return list(METADATA_FORMATS.values())
 
     def get_record_header(self, identifier: str) -> RecordHeader:
         pass
