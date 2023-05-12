@@ -13,6 +13,7 @@ lxml==4.9.2
 MarkupSafe==2.1.2
 oai-repo==0.3.4
 ply==3.11
+pysolr==3.9.0
 python-dotenv==1.0.0
 requests==2.30.0
 six==1.16.0

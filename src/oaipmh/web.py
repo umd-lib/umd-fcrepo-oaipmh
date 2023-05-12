@@ -1,3 +1,4 @@
+import os
 from http import HTTPStatus
 
 from flask import Flask, request, abort
@@ -8,6 +9,8 @@ from oaipmh.dataprovider import DataProvider
 
 app = Flask(__name__)
 
+SOLR_URL = os.environ.get('SOLR_URL')
+
 
 def status(response: OAIResponse) -> int:
     """Get the HTTP status code to return with the given OAI response."""
@@ -17,7 +20,7 @@ def status(response: OAIResponse) -> int:
         return HTTPStatus.OK
     else:
         error = response.xpath('/OAI-PMH/error')[0]
-        if error.get('code') == 'idDoesNotExist':
+        if error.get('code') in {'noRecordsMatch', 'idDoesNotExist'}:
             return HTTPStatus.NOT_FOUND
         else:
             return HTTPStatus.BAD_REQUEST
@@ -26,7 +29,7 @@ def status(response: OAIResponse) -> int:
 @app.route('/oai')
 def endpoint():
     try:
-        repo = OAIRepository(DataProvider())
+        repo = OAIRepository(DataProvider(solr_url=SOLR_URL))
         response = repo.process(request.args.copy())
     except OAIRepoExternalException as e:
         # An API call timed out or returned a non-200 HTTP code.

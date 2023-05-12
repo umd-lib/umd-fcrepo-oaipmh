@@ -4,5 +4,6 @@ version = "1.0.0dev"
 dependencies = [
     "flask",
     "oai-repo",
+    "pysolr",
     "python-dotenv",
 ]
