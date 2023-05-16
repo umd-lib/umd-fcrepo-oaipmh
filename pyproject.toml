@@ -3,7 +3,10 @@ name = "umd-fcrepo-oaipmh"
 version = "1.0.0dev"
 dependencies = [
     "flask",
+    "lxml",
     "oai-repo",
     "pysolr",
     "python-dotenv",
+    "requests",
+    "requests-jwtauth@git+https://github.com/umd-lib/requests-jwtauth.git@1.0.0",
 ]
