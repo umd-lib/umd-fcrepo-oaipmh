@@ -3,6 +3,7 @@
                 xmlns:dcterms="http://purl.org/dc/terms/"
                 xmlns:edm="http://www.europeana.eu/schemas/edm/"
                 xmlns:oai_dc="http://www.openarchives.org/OAI/2.0/oai_dc/"
+                xmlns:owl="http://www.w3.org/2002/07/owl#"
                 xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
                 xmlns:rdfs="http://www.w3.org/2000/01/rdf-schema#"
                 xmlns:rel="http://id.loc.gov/vocabulary/relators/"
@@ -62,6 +63,12 @@
   <!-- publisher -->
 
   <!-- relation -->
+  <xsl:template match="dcterms:isPartOf">
+    <dc:relation>
+      <xsl:variable name="target-uri" select="@rdf:resource"/>
+      <xsl:value-of select="//rdf:Description[@rdf:about=$target-uri]/owl:sameAs/@rdf:resource"/>
+    </dc:relation>
+  </xsl:template>
 
   <!-- rights -->
   <xsl:template match="dcterms:rights">
