@@ -1,6 +1,8 @@
 import logging
 import os
+import re
 import urllib.parse
+from collections.abc import Iterable
 from datetime import datetime
 from email.utils import parsedate_to_datetime
 from typing import Optional
@@ -10,7 +12,7 @@ from lxml import etree
 # noinspection PyProtectedMember
 from lxml.etree import _Element
 from oai_repo import MetadataFormat, DataInterface, Identify, RecordHeader, Set, OAIRepoExternalException
-from oai_repo.exceptions import OAIErrorCannotDisseminateFormat
+from oai_repo.exceptions import OAIErrorCannotDisseminateFormat, OAIErrorBadArgument
 from oai_repo.helpers import datestamp_long, granularity_format
 from requests import Session
 from requests_jwtauth import HTTPBearerAuth
@@ -28,6 +30,9 @@ PAGE_SIZE = os.environ.get('PAGE_SIZE', 25)
 OAI_REPOSITORY_NAME = os.environ.get('OAI_REPOSITORY_NAME')
 OAI_NAMESPACE_IDENTIFIER = os.environ.get('OAI_NAMESPACE_IDENTIFIER')
 REPORT_DELETED_RECORDS = os.environ.get('REPORT_DELETED_RECORDS', 'no')
+
+BASE_QUERY = 'rdf_type:pcdm\\:Object AND component:* NOT component:Page NOT component:Article'
+SETS = {}
 
 
 class OAIIdentifier:
@@ -59,6 +64,7 @@ class DataProvider(DataInterface):
         self.session = Session()
         self.session.auth = HTTPBearerAuth(os.environ.get('FCREPO_JWT_TOKEN'))
         self._transformers = load_transformers()
+        self.sets = {s.spec: s for s in get_sets(get_collection_titles(self.solr))}
 
     def transform(self, target_format: str, xml_root: _Element) -> _Element:
         try:
@@ -99,17 +105,21 @@ class DataProvider(DataInterface):
         oai_id = OAIIdentifier.parse(identifier)
         uri = oai_id.local_identifier
         response = self.session.get(uri, headers={'Accept': 'application/rdf+xml'})
-        rdf_xml = etree.fromstring(response.text)
-        return self.transform(metadataprefix, rdf_xml)
+        if response.ok:
+            rdf_xml = etree.fromstring(response.text)
+            return self.transform(metadataprefix, rdf_xml)
+        else:
+            logger.error(f'GET {uri} -> {response.status_code} {response.reason}')
+            raise OAIRepoExternalException('Unable to retrieve resource from fcrepo')
 
     def get_record_abouts(self, identifier: str) -> list[_Element]:
         return []
 
     def list_set_specs(self, identifier: str = None, cursor: int = 0) -> tuple:
-        pass
+        return self.sets, len(self.sets), None
 
     def get_set(self, setspec: str) -> Set:
-        pass
+        return self.sets[setspec]
 
     def list_identifiers(
             self,
@@ -127,10 +137,17 @@ class DataProvider(DataInterface):
             f'filter_set={filter_set}, '
             f'cursor={cursor})'
         )
-        filter_query = 'component:* NOT component:Page NOT component:Article'
+        filter_query = BASE_QUERY
         if filter_from or filter_until:
             datetime_range = get_solr_date_range(filter_from, filter_until)
             filter_query += f' AND last_modified:{datetime_range}'
+        if filter_set:
+            if filter_set in self.sets:
+                filter_query += f' AND collection_title_facet:"{self.sets[filter_set].name}"'
+            elif filter_set in SETS:
+                filter_query += f' AND ({SETS[filter_set]["filter"]})'
+            else:
+                raise OAIErrorBadArgument(f"'{filter_set}' is not a valid setSpec value")
         logger.debug(f'Solr fq = "{filter_query}"')
         try:
             results = self.solr.search(q='*:*', fq=filter_query, start=cursor, rows=self.limit)
@@ -150,3 +167,16 @@ def get_solr_date_range(timestamp_from: Optional[datetime], timestamp_until: Opt
     datestamp_from = datestamp_long(timestamp_from) if timestamp_from else '*'
     datestamp_until = datestamp_long(timestamp_until) if timestamp_until else '*'
     return f'[{datestamp_from} TO {datestamp_until}]'
+
+
+def get_set_spec(title: str) -> str:
+    return re.sub('[^a-z0-9]+', '_', title.lower())
+
+
+def get_sets(titles: Iterable[str]) -> list[Set]:
+    return [Set(spec=get_set_spec(title), name=title, description=[]) for title in titles]
+
+
+def get_collection_titles(solr: pysolr.Solr) -> list[str]:
+    results = solr.search(q='component:Collection', fl='display_title')
+    return [doc['display_title'] for doc in results]
