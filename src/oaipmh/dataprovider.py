@@ -28,7 +28,6 @@ DATESTAMP_GRANULARITY = os.environ.get('DATESTAMP_GRANULARITY', 'YYYY-MM-DDThh:m
 EARLIEST_DATESTAMP = os.environ.get('EARLIEST_DATESTAMP')
 PAGE_SIZE = os.environ.get('PAGE_SIZE', 25)
 OAI_REPOSITORY_NAME = os.environ.get('OAI_REPOSITORY_NAME')
-OAI_NAMESPACE_IDENTIFIER = os.environ.get('OAI_NAMESPACE_IDENTIFIER')
 REPORT_DELETED_RECORDS = os.environ.get('REPORT_DELETED_RECORDS', 'no')
 
 BASE_QUERY = 'rdf_type:pcdm\\:Object AND component:* NOT component:Page NOT component:Article'
@@ -57,9 +56,9 @@ class OAIIdentifier:
 class DataProvider(DataInterface):
     limit = PAGE_SIZE
 
-    def __init__(self, solr_url: str):
-        self.solr_url = solr_url
-        self.solr = pysolr.Solr(self.solr_url)
+    def __init__(self, solr_client: pysolr.Solr):
+        self.solr = solr_client
+        self.solr_url = self.solr.url
         self.solr_results = None
         self.session = Session()
         self.session.auth = HTTPBearerAuth(os.environ.get('FCREPO_JWT_TOKEN'))
@@ -84,7 +83,7 @@ class DataProvider(DataInterface):
         )
 
     def is_valid_identifier(self, identifier: str) -> bool:
-        return identifier.startswith(f'oai:{OAI_NAMESPACE_IDENTIFIER}:')
+        return identifier.startswith(f'oai:{os.environ.get("OAI_NAMESPACE_IDENTIFIER")}:')
 
     def get_metadata_formats(self, identifier: str | None = None) -> list[MetadataFormat]:
         return [transformer.metadata_format for transformer in self._transformers.values()]
@@ -160,12 +159,18 @@ class DataProvider(DataInterface):
 
 # XXX: use the URI as a stopgap until handles are implemented for fcrepo
 def get_oai_identifier(local_identifier: str) -> OAIIdentifier:
-    return OAIIdentifier(namespace_identifier=OAI_NAMESPACE_IDENTIFIER, local_identifier=local_identifier)
+    return OAIIdentifier(
+        namespace_identifier=os.environ.get('OAI_NAMESPACE_IDENTIFIER'),
+        local_identifier=local_identifier,
+    )
 
 
 def get_solr_date_range(timestamp_from: Optional[datetime], timestamp_until: Optional[datetime]) -> str:
-    datestamp_from = datestamp_long(timestamp_from) if timestamp_from else '*'
-    datestamp_until = datestamp_long(timestamp_until) if timestamp_until else '*'
+    try:
+        datestamp_from = datestamp_long(timestamp_from) if timestamp_from else '*'
+        datestamp_until = datestamp_long(timestamp_until) if timestamp_until else '*'
+    except AttributeError as e:
+        raise TypeError("'timestamp_from' and 'timestamp_until', if present, must be datetime objects") from e
     return f'[{datestamp_from} TO {datestamp_until}]'
 
 

@@ -1,6 +1,7 @@
 import os
 from http import HTTPStatus
 
+import pysolr
 from flask import Flask, request, abort
 from oai_repo import OAIRepository, OAIRepoInternalException, OAIRepoExternalException
 from oai_repo.response import OAIResponse
@@ -29,7 +30,7 @@ def status(response: OAIResponse) -> int:
 @app.route('/oai')
 def endpoint():
     try:
-        repo = OAIRepository(DataProvider(solr_url=SOLR_URL))
+        repo = OAIRepository(DataProvider(solr_client=pysolr.Solr(SOLR_URL)))
         response = repo.process(request.args.copy())
     except OAIRepoExternalException as e:
         # An API call timed out or returned a non-200 HTTP code.
