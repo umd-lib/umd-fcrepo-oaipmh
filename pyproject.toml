@@ -12,6 +12,7 @@ dependencies = [
 ]
 [project.optional-dependencies]
 test = [
+    "pycodestyle",
     "pytest",
     "pytest-cov",
 ]
