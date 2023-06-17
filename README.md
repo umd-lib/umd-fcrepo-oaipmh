@@ -4,6 +4,10 @@ OAI-PMH Server for Fedora
 
 ## Purpose
 
+This is an [OAI-PMH] server for publishing metadata records from a Fedora 
+repository. It uses a Solr index for general queries, and connects 
+directly to Fedora to retrieve the full metadata record for an item.
+
 ## Development Environment
 
 Python version: 3.11
@@ -15,7 +19,7 @@ git clone git@github.com:umd-lib/umd-fcrepo-oaipmh.git
 cd umd-fcrepo-oaipmh
 pyenv install --skip-existing $(cat .python-version)
 python -m venv .venv --prompt umd-fcrepo-oaipmh-py$(cat .python-version)
-pip install -r requirements.txt -e .
+pip install -r test.requirements.txt -e .
 ```
 
 ### Configuration
@@ -53,3 +57,31 @@ To change the port, add `-p {port number}` to the `flask` command:
 # for example, to run on port 8000
 flask --app oaipmh.web:app run -p 8000
 ```
+
+### Testing
+
+This project uses the [pytest] testing framework. To run the full
+[test suite](tests):
+
+```bash
+pytest
+```
+
+To run the test suite with coverage information from [pytest-cov]:
+
+```bash
+pytest --cov src --cov-report term-missing
+```
+
+This project also uses [pycodestyle] as a style checker and linter:
+
+```bash
+pycodestyle src
+```
+
+Configuration of pycodestyle is found in the [tox.ini](tox.ini) file.
+
+[OAI-PMH]: https://www.openarchives.org/pmh/
+[pytest]: https://docs.pytest.org/en/7.3.x/
+[pytest-cov]: https://pypi.org/project/pytest-cov/
+[pycodestyle]: https://pycodestyle.pycqa.org/en/latest/
