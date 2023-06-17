@@ -5,8 +5,7 @@ import pysolr
 import pytest
 from oai_repo import Set
 
-from oaipmh.dataprovider import OAIIdentifier, get_solr_date_range, get_set_spec, get_sets, get_collection_titles, \
-    get_oai_identifier
+from oaipmh.dataprovider import get_solr_date_range, get_set_spec, get_sets, get_collection_titles
 
 
 @pytest.mark.parametrize(
@@ -73,17 +72,3 @@ def test_get_collection_titles():
     assert len(titles) == 2
     assert titles[0] == 'Foo'
     assert titles[1] == 'Bar'
-
-
-@pytest.mark.parametrize(
-    ('local_identifier', 'expected'),
-    [
-        ('foo', 'oai:fcrepo:foo'),
-        ('http://fcrepo-local:8080/fcrepo/rest/bar', 'oai:fcrepo:http%3A//fcrepo-local%3A8080/fcrepo/rest/bar'),
-    ]
-)
-def test_get_oai_identifier(monkeypatch, local_identifier, expected):
-    monkeypatch.setenv('OAI_NAMESPACE_IDENTIFIER', 'fcrepo')
-    identifier = get_oai_identifier(local_identifier)
-    assert isinstance(identifier, OAIIdentifier)
-    assert str(identifier) == expected
