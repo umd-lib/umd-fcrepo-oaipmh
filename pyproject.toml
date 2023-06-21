@@ -10,3 +10,9 @@ dependencies = [
     "requests",
     "requests-jwtauth@git+https://github.com/umd-lib/requests-jwtauth.git@1.0.0",
 ]
+[project.optional-dependencies]
+test = [
+    "pycodestyle",
+    "pytest",
+    "pytest-cov",
+]

@@ -1,0 +1,53 @@
+<rdf:RDF
+        xmlns:geo="http://www.w3.org/2003/01/geo/wgs84_pos#"
+        xmlns:dcterms="http://purl.org/dc/terms/"
+        xmlns:dc="http://purl.org/dc/elements/1.1/"
+        xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#"
+        xmlns:iana="http://www.iana.org/assignments/relation/"
+        xmlns:edm="http://www.europeana.eu/schemas/edm/"
+        xmlns:fedora="http://fedora.info/definitions/v4/repository#"
+        xmlns:bibo="http://purl.org/ontology/bibo/"
+        xmlns:pcdm="http://pcdm.org/models#">
+  <rdf:Description rdf:about="https://fcrepo-test.lib.umd.edu/fcrepo/rest/pcdm/61/4f/aa/1c/614faa1c-2b15-4112-9a60-01a5a33a1c37">
+    <rdf:type rdf:resource="http://www.w3.org/ns/ldp#RDFSource"/>
+    <pcdm:memberOf rdf:resource="https://fcrepo-test.lib.umd.edu/fcrepo/rest/pcdm/9c/33/f7/f3/9c33f7f3-e275-4248-9c46-36666b28d704"/>
+    <iana:last rdf:resource="http://fedora.info/definitions/v4/repository#inaccessibleResource"/>
+    <edm:hasType>Newspapers</edm:hasType>
+    <edm:hasType rdf:resource="http://id.loc.gov/authorities/genreForms/gf2014026132.html"/>
+    <dc:language>Japanese</dc:language>
+    <fedora:created rdf:datatype="http://www.w3.org/2001/XMLSchema#dateTime">2022-04-11T17:38:46.055Z</fedora:created>
+    <dcterms:subject rdf:resource="http://id.loc.gov/authorities/subjects/sh85144914.html"/>
+    <dc:format>Newspapers, 74 x 52.3 cm.</dc:format>
+    <dcterms:type rdf:resource="http://purl.org/dc/dcmitype/Image"/>
+    <dcterms:isPartOf>Gordon W. Prange Collection</dcterms:isPartOf>
+    <rdf:type rdf:resource="http://vocab.lib.umd.edu/access#Public"/>
+    <fedora:writable rdf:datatype="http://www.w3.org/2001/XMLSchema#boolean">false</fedora:writable>
+    <dcterms:title xml:lang="ja">国民ニュース</dcterms:title>
+    <dcterms:identifier>prange-042754</dcterms:identifier>
+    <fedora:lastModifiedBy>plastron</fedora:lastModifiedBy>
+    <rdf:type rdf:resource="http://purl.org/ontology/bibo/Image"/>
+    <fedora:createdBy>plastron</fedora:createdBy>
+    <geo:lat>35.6895</geo:lat>
+    <dcterms:title xml:lang="ja-latn">Kokumin nyusu</dcterms:title>
+    <rdf:type rdf:resource="http://fedora.info/definitions/v4/repository#Container"/>
+    <dc:publisher xml:lang="ja">国際日報社</dc:publisher>
+    <dcterms:type rdf:resource="http://purl.org/dc/dcmitype/StillImage"/>
+    <dcterms:rights rdf:resource="http://rightsstatements.org/vocab/NoC-US/1.0/"/>
+    <fedora:lastModified rdf:datatype="http://www.w3.org/2001/XMLSchema#dateTime">2022-04-11T17:38:46.055Z</fedora:lastModified>
+    <dc:type>image</dc:type>
+    <dc:coverage>Tokyo</dc:coverage>
+    <pcdm:hasMember rdf:resource="http://fedora.info/definitions/v4/repository#inaccessibleResource"/>
+    <dcterms:isPartOf xml:lang="ja">ゴードン W. プランゲ文庫</dcterms:isPartOf>
+    <dc:subject>Wall newspapers</dc:subject>
+    <bibo:locator>NZK32</bibo:locator>
+    <iana:first rdf:resource="http://fedora.info/definitions/v4/repository#inaccessibleResource"/>
+    <dc:publisher xml:lang="ja-latn">Kokusai Nipposha</dc:publisher>
+    <geo:long>139.69171</geo:long>
+    <fedora:hasParent rdf:resource="https://fcrepo-test.lib.umd.edu/fcrepo/rest/pcdm"/>
+    <rdf:type rdf:resource="http://pcdm.org/models#Object"/>
+    <rdf:type rdf:resource="http://www.w3.org/ns/ldp#Container"/>
+    <rdf:type rdf:resource="http://fedora.info/definitions/v4/repository#Resource"/>
+    <dc:coverage xml:lang="ja">東京</dc:coverage>
+    <dcterms:spatial rdf:resource="http://sws.geonames.org/1850144"/>
+  </rdf:Description>
+</rdf:RDF>

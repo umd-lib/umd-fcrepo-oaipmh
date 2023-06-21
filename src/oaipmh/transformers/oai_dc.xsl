@@ -9,6 +9,7 @@
                 xmlns:rel="http://id.loc.gov/vocabulary/relators/"
                 xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
                 xsi:schemaLocation="http://www.openarchives.org/OAI/2.0/oai_dc/ http://www.openarchives.org/OAI/2.0/oai_dc.xsd">
+  <xsl:strip-space elements="*"/>
 
   <xsl:template match="text()"/>
 

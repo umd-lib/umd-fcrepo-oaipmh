@@ -3,9 +3,10 @@ import os
 import re
 import urllib.parse
 from collections.abc import Iterable
+from dataclasses import MISSING
 from datetime import datetime
 from email.utils import parsedate_to_datetime
-from typing import Optional
+from typing import Optional, Any
 
 import pysolr
 from lxml import etree
@@ -21,15 +22,6 @@ from oaipmh.transformers import load_transformers
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-BASE_URL = os.environ.get('BASE_URL', 'http://localhost:5000/')
-ADMIN_EMAIL = os.environ.get('ADMIN_EMAIL')
-DATESTAMP_GRANULARITY = os.environ.get('DATESTAMP_GRANULARITY', 'YYYY-MM-DDThh:mm:ssZ')
-EARLIEST_DATESTAMP = os.environ.get('EARLIEST_DATESTAMP')
-PAGE_SIZE = os.environ.get('PAGE_SIZE', 25)
-OAI_REPOSITORY_NAME = os.environ.get('OAI_REPOSITORY_NAME')
-OAI_NAMESPACE_IDENTIFIER = os.environ.get('OAI_NAMESPACE_IDENTIFIER')
-REPORT_DELETED_RECORDS = os.environ.get('REPORT_DELETED_RECORDS', 'no')
 
 BASE_QUERY = 'rdf_type:pcdm\\:Object AND component:* NOT component:Page NOT component:Article'
 SETS = {}
@@ -54,17 +46,56 @@ class OAIIdentifier:
         return f'oai:{self.namespace_identifier}:{urllib.parse.quote(self.local_identifier)}'
 
 
-class DataProvider(DataInterface):
-    limit = PAGE_SIZE
+class EnvAttribute:
+    """
+    Descriptor class that maps an attribute of a class to an environment variable.
+    """
+    def __init__(self, env_var: str, default: Optional[Any] = MISSING):
+        self.env_var = env_var
+        self.default = default
 
-    def __init__(self, solr_url: str):
-        self.solr_url = solr_url
-        self.solr = pysolr.Solr(self.solr_url)
+    def __set_name__(self, owner, name):
+        self.name = name
+
+    def __get__(self, instance, owner):
+        if self.default is not MISSING:
+            value = os.environ.get(self.env_var, self.default)
+        else:
+            value = os.environ.get(self.env_var)
+
+        # if this attribute has a type annotation, use it to cast the
+        # string value from the environment variable to some other type
+        if self.name in instance.__annotations__:
+            return instance.__annotations__[self.name](value)
+        else:
+            return value
+
+
+class DataProvider(DataInterface):
+    admin_email = EnvAttribute('ADMIN_EMAIL')
+    base_url = EnvAttribute('BASE_URL', 'http://localhost:5000/')
+    datestamp_granularity = EnvAttribute('DATESTAMP_GRANULARITY', 'YYYY-MM-DDThh:mm:ssZ')
+    earliest_datestamp = EnvAttribute('EARLIEST_DATESTAMP')
+    oai_repository_name = EnvAttribute('OAI_REPOSITORY_NAME')
+    oai_namespace_identifier = EnvAttribute('OAI_NAMESPACE_IDENTIFIER')
+    report_deleted_records = EnvAttribute('REPORT_DELETED_RECORDS', 'no')
+    limit: int = EnvAttribute('PAGE_SIZE', 25)
+
+    def __init__(self, solr_client: pysolr.Solr):
+        self.solr = solr_client
+        self.solr_url = self.solr.url
         self.solr_results = None
         self.session = Session()
         self.session.auth = HTTPBearerAuth(os.environ.get('FCREPO_JWT_TOKEN'))
         self._transformers = load_transformers()
         self.sets = {s.spec: s for s in get_sets(get_collection_titles(self.solr))}
+
+    # XXX: use the URI as a stopgap until handles are implemented for fcrepo
+    def get_oai_identifier(self, local_identifier: str) -> OAIIdentifier:
+        return OAIIdentifier(
+            namespace_identifier=self.oai_namespace_identifier,
+            local_identifier=local_identifier,
+        )
 
     def transform(self, target_format: str, xml_root: _Element) -> _Element:
         try:
@@ -75,16 +106,16 @@ class DataProvider(DataInterface):
 
     def get_identify(self) -> Identify:
         return Identify(
-            base_url=BASE_URL,
-            admin_email=[ADMIN_EMAIL],
-            repository_name=OAI_REPOSITORY_NAME,
-            earliest_datestamp=EARLIEST_DATESTAMP,
-            deleted_record=REPORT_DELETED_RECORDS,
-            granularity=DATESTAMP_GRANULARITY,
+            base_url=self.base_url,
+            admin_email=[self.admin_email],
+            repository_name=self.oai_repository_name,
+            earliest_datestamp=self.earliest_datestamp,
+            deleted_record=self.report_deleted_records,
+            granularity=self.datestamp_granularity,
         )
 
     def is_valid_identifier(self, identifier: str) -> bool:
-        return identifier.startswith(f'oai:{OAI_NAMESPACE_IDENTIFIER}:')
+        return identifier.startswith(f'oai:{self.oai_namespace_identifier}:')
 
     def get_metadata_formats(self, identifier: str | None = None) -> list[MetadataFormat]:
         return [transformer.metadata_format for transformer in self._transformers.values()]
@@ -97,7 +128,7 @@ class DataProvider(DataInterface):
             last_modified = parsedate_to_datetime(response.headers['Last-Modified'])
         return RecordHeader(
             identifier=identifier,
-            datestamp=granularity_format(DATESTAMP_GRANULARITY, last_modified),
+            datestamp=granularity_format(self.datestamp_granularity, last_modified),
             # TODO: include setSpec elements
         )
 
@@ -153,19 +184,17 @@ class DataProvider(DataInterface):
             results = self.solr.search(q='*:*', fq=filter_query, start=cursor, rows=self.limit)
         except pysolr.SolrError as e:
             raise OAIRepoExternalException('Unable to connect to Solr') from e
-        self.solr_results = {str(get_oai_identifier(doc['id'])): doc for doc in results}
+        self.solr_results = {str(self.get_oai_identifier(doc['id'])): doc for doc in results}
         identifiers = list(self.solr_results.keys())
         return identifiers, results.hits, None
 
 
-# XXX: use the URI as a stopgap until handles are implemented for fcrepo
-def get_oai_identifier(local_identifier: str) -> OAIIdentifier:
-    return OAIIdentifier(namespace_identifier=OAI_NAMESPACE_IDENTIFIER, local_identifier=local_identifier)
-
-
 def get_solr_date_range(timestamp_from: Optional[datetime], timestamp_until: Optional[datetime]) -> str:
-    datestamp_from = datestamp_long(timestamp_from) if timestamp_from else '*'
-    datestamp_until = datestamp_long(timestamp_until) if timestamp_until else '*'
+    try:
+        datestamp_from = datestamp_long(timestamp_from) if timestamp_from else '*'
+        datestamp_until = datestamp_long(timestamp_until) if timestamp_until else '*'
+    except AttributeError as e:
+        raise TypeError("'timestamp_from' and 'timestamp_until', if present, must be datetime objects") from e
     return f'[{datestamp_from} TO {datestamp_until}]'
 
 
