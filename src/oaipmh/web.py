@@ -6,6 +6,7 @@ from flask import Flask, request, abort
 from oai_repo import OAIRepository, OAIRepoInternalException, OAIRepoExternalException
 from oai_repo.response import OAIResponse
 
+from oaipmh import __version__
 from oaipmh.dataprovider import DataProvider
 
 
@@ -34,13 +35,30 @@ def status(response: OAIResponse) -> int:
 
 def create_app() -> Flask:
     app = Flask(__name__)
+    app.logger.info(f'Starting umd-fcrepo-oaipmh/{__version__}')
     solr_client = get_solr_client()
     app.logger.info(f'Solr URL is {solr_client.url}')
+    data_provider = DataProvider(solr_client=solr_client)
+    app.logger.debug(f'Initialized the data provider: {data_provider.get_identify()}')
+
+    @app.route('/')
+    def home():
+        endpoint_url = data_provider.base_url + 'oai'
+        return f"""
+        <h1>OAI-PMH Service for Fedora: {data_provider.oai_repository_name}</h1>
+        <ul>
+          <li>Version: umd-fcrepo-oaipmh/{__version__}</li>
+          <li>Endpoint: {endpoint_url}</li>
+          <li>Identify: <a href="{endpoint_url}?verb=Identify">{endpoint_url}?verb=Identify</a></li>
+        </ul>
+        <p>See the <a href="http://www.openarchives.org/OAI/openarchivesprotocol.html" target="_blank">OAI-PMH
+        Protocol 2.0 Specification</a> for information about how to use this service.</p>
+        """
 
     @app.route('/oai')
     def endpoint():
         try:
-            repo = OAIRepository(DataProvider(solr_client=solr_client))
+            repo = OAIRepository(data_provider)
             response = repo.process(request.args.copy())
         except OAIRepoExternalException as e:
             # An API call timed out or returned a non-200 HTTP code.
