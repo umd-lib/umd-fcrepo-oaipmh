@@ -9,6 +9,7 @@ dependencies = [
     "python-dotenv",
     "requests",
     "requests-jwtauth@git+https://github.com/umd-lib/requests-jwtauth.git@1.0.0",
+    "waitress",
 ]
 [project.optional-dependencies]
 test = [
@@ -16,3 +17,5 @@ test = [
     "pytest",
     "pytest-cov",
 ]
+[project.scripts]
+fcrepo-oaipmh-server = "oaipmh.server:run"

@@ -88,7 +88,10 @@ class DataProvider(DataInterface):
         self.session = Session()
         self.session.auth = HTTPBearerAuth(os.environ.get('FCREPO_JWT_TOKEN'))
         self._transformers = load_transformers()
-        self.sets = {s.spec: s for s in get_sets(get_collection_titles(self.solr))}
+
+    @property
+    def sets(self) -> dict[str, Set]:
+        return {s.spec: s for s in get_sets(get_collection_titles(self.solr))}
 
     # XXX: use the URI as a stopgap until handles are implemented for fcrepo
     def get_oai_identifier(self, local_identifier: str) -> OAIIdentifier:
@@ -207,5 +210,8 @@ def get_sets(titles: Iterable[str]) -> list[Set]:
 
 
 def get_collection_titles(solr: pysolr.Solr) -> list[str]:
-    results = solr.search(q='component:Collection', fl='display_title')
+    try:
+        results = solr.search(q='component:Collection', fl='display_title')
+    except pysolr.SolrError as e:
+        raise OAIRepoExternalException('Unable to connect to Solr') from e
     return [doc['display_title'] for doc in results]
