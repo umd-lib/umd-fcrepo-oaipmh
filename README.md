@@ -55,7 +55,7 @@ To change the port, add `-p {port number}` to the `flask` command:
 
 ```bash
 # for example, to run on port 8000
-flask --app oaipmh.web:app run -p 8000
+flask --app oaipmh.web:create_app run -p 8000
 ```
 
 ### Testing
