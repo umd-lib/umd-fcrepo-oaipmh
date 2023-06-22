@@ -46,7 +46,7 @@ def create_app() -> Flask:
             # An API call timed out or returned a non-200 HTTP code.
             # Log the failure and abort with server HTTP 503.
             app.logger.error(f'Upstream error: {e}')
-            abort(HTTPStatus.SERVICE_UNAVAILABLE)
+            abort(HTTPStatus.SERVICE_UNAVAILABLE, str(e))
         except OAIRepoInternalException as e:
             # There is a fault in how the DataInterface was implemented.
             # Log the failure and abort with server HTTP 500.
