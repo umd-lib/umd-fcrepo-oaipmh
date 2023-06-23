@@ -64,7 +64,7 @@ class EnvAttribute:
 
         # if this attribute has a type annotation, use it to cast the
         # string value from the environment variable to some other type
-        if self.name in instance.__annotations__:
+        if getattr(instance, '__annotations__', False) and self.name in instance.__annotations__:
             return instance.__annotations__[self.name](value)
         else:
             return value
