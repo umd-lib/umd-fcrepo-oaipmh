@@ -48,7 +48,7 @@ FLASK_DEBUG=1
 To run the application in debug mode, with hot code reloading:
 
 ```bash
-flask --app oaipmh.web:app run
+flask --app oaipmh.web:create_app run
 ```
 
 The application will be available at <http://localhost:5000/>
