@@ -1,6 +1,6 @@
 import pytest
 
-from oaipmh.dataprovider import OAIIdentifier
+from oaipmh.oai import OAIIdentifier, get_set_spec
 
 
 def test_oai_identifier_parse_invalid():
@@ -21,3 +21,15 @@ def test_oai_identifier_parse(identifier_string, namespace_identifier, local_ide
     assert identifier.namespace_identifier == namespace_identifier
     assert identifier.local_identifier == local_identifier
     assert str(identifier) == identifier_string
+
+
+@pytest.mark.parametrize(
+    ('title', 'expected'),
+    [
+        ('', ''),
+        ('Simple', 'simple'),
+        ('SOME Collection [#1]', 'some_collection_1_'),
+    ]
+)
+def test_get_set_spec(title, expected):
+    assert get_set_spec(title) == expected

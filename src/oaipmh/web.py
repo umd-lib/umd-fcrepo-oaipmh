@@ -1,22 +1,16 @@
 import os
 from http import HTTPStatus
+from typing import Any, Optional, TextIO
 
 import pysolr
+import yaml
 from flask import Flask, request, abort
 from oai_repo import OAIRepository, OAIRepoInternalException, OAIRepoExternalException
 from oai_repo.response import OAIResponse
 
 from oaipmh import __version__
 from oaipmh.dataprovider import DataProvider
-
-
-def get_solr_client():
-    try:
-        solr_url = os.environ['SOLR_URL']
-    except KeyError as e:
-        raise RuntimeError(f'Missing environment variable {e}')
-
-    return pysolr.Solr(solr_url)
+from oaipmh.solr import Index, DEFAULT_SOLR_CONFIG
 
 
 def status(response: OAIResponse) -> int:
@@ -33,12 +27,24 @@ def status(response: OAIResponse) -> int:
             return HTTPStatus.BAD_REQUEST
 
 
-def create_app() -> Flask:
+def get_config(config_source: Optional[str | TextIO] = None) -> dict[str, Any]:
+    if config_source is None:
+        return DEFAULT_SOLR_CONFIG
+    if isinstance(config_source, str):
+        with open(config_source) as fh:
+            return yaml.safe_load(fh)
+    if config_source:
+        return yaml.safe_load(config_source)
+
+
+def create_app(solr_config_file) -> Flask:
     app = Flask(__name__)
     app.logger.info(f'Starting umd-fcrepo-oaipmh/{__version__}')
-    solr_client = get_solr_client()
-    app.logger.info(f'Solr URL is {solr_client.url}')
-    data_provider = DataProvider(solr_client=solr_client)
+    index = Index(
+        config=get_config(solr_config_file),
+        solr_client=pysolr.Solr(os.environ['SOLR_URL']),
+    )
+    data_provider = DataProvider(index=index)
     app.logger.debug(f'Initialized the data provider: {data_provider.get_identify()}')
 
     @app.route('/')

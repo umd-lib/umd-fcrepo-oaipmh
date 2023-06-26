@@ -1,26 +1,46 @@
-from typing import Optional
 from unittest.mock import MagicMock
 
 import pysolr
 import pytest
-import requests
 from lxml import etree
 from oai_repo import Set
 from oai_repo.exceptions import OAIErrorCannotDisseminateFormat, OAIRepoExternalException
 
-from oaipmh.dataprovider import DataProvider, OAIIdentifier
+from oaipmh.dataprovider import DataProvider
+from oaipmh.oai import OAIIdentifier
+from oaipmh.solr import Index, DEFAULT_SOLR_CONFIG
 
 
 @pytest.fixture
-def mock_solr_client():
-    mock_solr = MagicMock(spec=pysolr.Solr)
-    mock_solr.url = 'http://localhost:8983/solr/fcrepo'
-    return mock_solr
+def index_with_defaults(mock_solr_client):
+    return Index(
+        solr_client=mock_solr_client,
+        config=DEFAULT_SOLR_CONFIG,
+    )
 
 
 @pytest.fixture
-def provider(mock_solr_client):
-    return DataProvider(solr_client=mock_solr_client)
+def index_with_auto_sets(mock_solr_client):
+    return Index(
+        solr_client=mock_solr_client,
+        config={
+            'base_query': 'handle:*',
+            'handle_field': 'handle',
+            'uri_field': 'id',
+            'last_modified_field': 'last_modified',
+            'auto_create_sets': True,
+            'auto_set': {
+                'query': 'component:Collection',
+                'name_field': 'display_title',
+                'name_query_field': 'collection_title_facet',
+            },
+            'sets': [],
+        })
+
+
+@pytest.fixture
+def provider(mock_solr_client, index_with_auto_sets):
+    return DataProvider(index=index_with_auto_sets)
 
 
 @pytest.fixture
@@ -98,29 +118,76 @@ def test_get_oai_identifier(monkeypatch, provider, local_identifier, expected):
     assert str(identifier) == expected
 
 
-def test_get_record_header_from_solr_results(provider):
-    provider.solr_results = {
-        'oai:fcrepo:foo': {
-            'last_modified': '2023-06-16T08:37:29Z'
+def test_handle_not_found(provider):
+    provider.index.solr.search = MagicMock(return_value=[])
+    with pytest.raises(OAIRepoExternalException):
+        provider.get_record_header('oai:fcrepo:foo')
+
+
+class MockSolrResults:
+    docs = [
+    ]
+
+    def __iter__(self):
+        return iter(self.docs)
+
+
+def test_get_record_header(mock_solr_client):
+    mock_index = Index(config=DEFAULT_SOLR_CONFIG, solr_client=mock_solr_client)
+    mock_index.get_doc = MagicMock(
+        return_value={
+            'id': 'oai:fcrepo:foo',
+            'last_modified': '2023-06-16T08:37:29Z',
         }
-    }
+    )
+    provider = DataProvider(index=mock_index)
     header = provider.get_record_header('oai:fcrepo:foo')
     assert header.identifier == 'oai:fcrepo:foo'
     assert header.datestamp == '2023-06-16T08:37:29Z'
 
 
-def test_sets(provider):
-    provider.solr.search = MagicMock(return_value=[{'display_title': 'Foo'}, {'display_title': 'Bar'}])
-    sets = provider.sets
-    assert len(sets) == 2
-    assert sets.keys() == {'foo', 'bar'}
-    assert all(isinstance(v, Set) for v in sets.values())
+def test_list_set_specs(index_with_defaults):
+    index_with_defaults.get_sets = MagicMock(return_value={
+        'foo': {
+            'spec': 'foo',
+            'name': 'Foo',
+            'filter': 'collection_title_facet:Foo',
+        },
+        'bar': {
+            'spec': 'bar',
+            'name': 'Bar',
+            'filter': 'collection_title_facet:Bar',
+        },
+    })
+    provider = DataProvider(index=index_with_defaults)
+    sets, length, _ = provider.list_set_specs()
+    assert all(isinstance(s, Set) for s in sets)
+    assert length == 2
 
 
-def test_handle_not_found(provider):
-    provider.solr.search = MagicMock(return_value=[])
-    with pytest.raises(OAIRepoExternalException):
-        provider.get_record_header('oai:fcrepo:foo')
+def test_get_sets(index_with_defaults):
+    index_with_defaults.get_sets = MagicMock(return_value={
+        'foo': {
+            'spec': 'foo',
+            'name': 'Foo',
+            'filter': 'collection_title_facet:Foo',
+        },
+        'bar': {
+            'spec': 'bar',
+            'name': 'Bar',
+            'filter': 'collection_title_facet:Bar',
+        },
+    })
+    provider = DataProvider(index=index_with_defaults)
+    oai_set = provider.get_set('bar')
+    assert oai_set.spec == 'bar'
+    assert oai_set.name == 'Bar'
+    assert oai_set.description == []
+
+
+def test_get_record_abouts(provider):
+    # currently, this always returns an empty list
+    assert provider.get_record_abouts('oai:fcrepo:foo') == []
 
 
 class OKResponse:
@@ -133,26 +200,14 @@ class OKResponse:
         return self
 
 
-@pytest.mark.parametrize(
-    ('solr_results', 'search_count'),
-    [
-        # already cached in solr_results, no request to Solr
-        ({'oai:fcrepo:foo': {'id': 'http://example.com/foo'}}, 0),
-        # missing id, should fall back to request to Solr
-        ({'oai:fcrepo:foo': {}}, 1),
-        # missing key, should fall back to request to Solr
-        ({}, 1),
-    ]
-)
-def test_get_record_metadata(provider, prange_text, solr_results, search_count):
+def test_get_record_metadata(provider, prange_text):
     provider.session.get = MagicMock(return_value=OKResponse(prange_text))
-    provider.solr_results = solr_results
     results = MagicMock()
     results.docs = [{'id': 'http://example.com/foo', 'handle': 'foo'}]
-    provider.solr.search = MagicMock(return_value=results)
+    provider.index.solr.search = MagicMock(return_value=results)
 
     assert provider.get_record_metadata('oai:fcrepo:foo', 'oai_dc') is not None
-    assert provider.solr.search.call_count == search_count
+    assert provider.index.solr.search.call_count == 1
 
 
 class NotFoundResponse:
