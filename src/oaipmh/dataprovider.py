@@ -5,7 +5,6 @@ import urllib.parse
 from collections.abc import Iterable
 from dataclasses import MISSING
 from datetime import datetime
-from email.utils import parsedate_to_datetime
 from typing import Optional, Any
 
 import pysolr
@@ -23,7 +22,7 @@ from oaipmh.transformers import load_transformers
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
 
-BASE_QUERY = 'rdf_type:pcdm\\:Object AND component:* NOT component:Page NOT component:Article'
+BASE_QUERY = 'rdf_type:pcdm\\:Object AND component:* NOT component:Page NOT component:Article AND handle:*'
 SETS = {}
 
 
@@ -65,7 +64,7 @@ class EnvAttribute:
 
         # if this attribute has a type annotation, use it to cast the
         # string value from the environment variable to some other type
-        if self.name in instance.__annotations__:
+        if getattr(instance, '__annotations__', False) and self.name in instance.__annotations__:
             return instance.__annotations__[self.name](value)
         else:
             return value
@@ -84,7 +83,7 @@ class DataProvider(DataInterface):
     def __init__(self, solr_client: pysolr.Solr):
         self.solr = solr_client
         self.solr_url = self.solr.url
-        self.solr_results = None
+        self.solr_results: dict[str, dict[str, Any]] = {}
         self.session = Session()
         self.session.auth = HTTPBearerAuth(os.environ.get('FCREPO_JWT_TOKEN'))
         self._transformers = load_transformers()
@@ -93,14 +92,64 @@ class DataProvider(DataInterface):
     def sets(self) -> dict[str, Set]:
         return {s.spec: s for s in get_sets(get_collection_titles(self.solr))}
 
-    # XXX: use the URI as a stopgap until handles are implemented for fcrepo
-    def get_oai_identifier(self, local_identifier: str) -> OAIIdentifier:
+    def get_oai_identifier(self, handle: str) -> OAIIdentifier:
+        """
+        Given a handle, return a full OAI identifier.
+        
+        :param handle: resource handle, e.g. "1903.1/12345"
+        :return: OAI Identifier
+        """
         return OAIIdentifier(
             namespace_identifier=self.oai_namespace_identifier,
-            local_identifier=local_identifier,
+            local_identifier=handle,
         )
 
+    def get_solr_doc(self, identifier: str) -> dict[str, Any]:
+        oai_id = OAIIdentifier.parse(identifier)
+        handle = oai_id.local_identifier
+        results = self.solr.search(q=f'handle:{handle}')
+        if not results:
+            raise OAIRepoExternalException(f'Unable to find handle {handle} in Solr')
+        doc = results.docs[0]
+        # cache the resulting doc
+        self.solr_results[str(oai_id)] = doc
+        return doc
+
+    def get_uri(self, identifier: str) -> str:
+        """
+        Given an OAI identifier string, return the URI for the fcrepo resource.
+
+        :param identifier: OAI identifier string ("oai:...")
+        :return: URI string
+        :raises OAIRepoExternalException:
+        """
+        try:
+            return self.solr_results[identifier]['id']
+        except KeyError:
+            # not found in the Solr results, fall back to a new Solr request
+            return self.get_solr_doc(identifier)['id']
+
+    def get_last_modified(self, identifier: str) -> datetime:
+        try:
+            last_modified = self.solr_results[identifier]['last_modified']
+        except KeyError:
+            # not found in the Solr results, fall back to a new Solr request
+            last_modified = self.get_solr_doc(identifier)['last_modified']
+
+        return datetime.fromisoformat(last_modified)
+
     def transform(self, target_format: str, xml_root: _Element) -> _Element:
+        """
+        Perform an XSLT transformation on the given XML element to the
+        specified target format. The target formats are the same as the
+        metadata prefixes.
+
+        :param target_format: metadata prefix of the desired format
+        :param xml_root: XML element to transform
+        :return: XML element
+        :raises OAIErrorCannotDisseminateFormat: if the target_format
+        is not supported
+        """
         try:
             transform = self._transformers[target_format]
         except KeyError:
@@ -124,11 +173,7 @@ class DataProvider(DataInterface):
         return [transformer.metadata_format for transformer in self._transformers.values()]
 
     def get_record_header(self, identifier: str) -> RecordHeader:
-        if self.solr_results is not None:
-            last_modified = datetime.fromisoformat(self.solr_results[identifier]['last_modified'])
-        else:
-            response = self.session.head(OAIIdentifier.parse(identifier).local_identifier)
-            last_modified = parsedate_to_datetime(response.headers['Last-Modified'])
+        last_modified = self.get_last_modified(identifier)
         return RecordHeader(
             identifier=identifier,
             datestamp=granularity_format(self.datestamp_granularity, last_modified),
@@ -136,8 +181,7 @@ class DataProvider(DataInterface):
         )
 
     def get_record_metadata(self, identifier: str, metadataprefix: str) -> _Element | None:
-        oai_id = OAIIdentifier.parse(identifier)
-        uri = oai_id.local_identifier
+        uri = self.get_uri(identifier)
         response = self.session.get(uri, headers={'Accept': 'application/rdf+xml'})
         if response.ok:
             rdf_xml = etree.fromstring(response.text)
@@ -187,7 +231,9 @@ class DataProvider(DataInterface):
             results = self.solr.search(q='*:*', fq=filter_query, start=cursor, rows=self.limit)
         except pysolr.SolrError as e:
             raise OAIRepoExternalException('Unable to connect to Solr') from e
-        self.solr_results = {str(self.get_oai_identifier(doc['id'])): doc for doc in results}
+        for doc in results:
+            oai_id = self.get_oai_identifier(doc['handle'])
+            self.solr_results[str(oai_id)] = doc
         identifiers = list(self.solr_results.keys())
         return identifiers, results.hits, None
 

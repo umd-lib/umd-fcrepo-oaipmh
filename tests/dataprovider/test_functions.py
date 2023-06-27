@@ -3,7 +3,7 @@ from unittest.mock import MagicMock
 
 import pysolr
 import pytest
-from oai_repo import Set
+from oai_repo import Set, OAIRepoExternalException
 
 from oaipmh.dataprovider import get_solr_date_range, get_set_spec, get_sets, get_collection_titles
 
@@ -72,3 +72,11 @@ def test_get_collection_titles():
     assert len(titles) == 2
     assert titles[0] == 'Foo'
     assert titles[1] == 'Bar'
+
+
+def test_get_collection_titles_solr_error():
+    mock_solr = MagicMock(spec=pysolr.Solr)
+    mock_solr.search = MagicMock(side_effect=pysolr.SolrError)
+    with pytest.raises(OAIRepoExternalException):
+        get_collection_titles(mock_solr)
+
