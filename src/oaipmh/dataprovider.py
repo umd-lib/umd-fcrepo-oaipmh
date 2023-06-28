@@ -1,48 +1,24 @@
 import logging
 import os
-import re
-import urllib.parse
-from collections.abc import Iterable
 from dataclasses import MISSING
 from datetime import datetime
 from typing import Optional, Any
 
-import pysolr
 from lxml import etree
 # noinspection PyProtectedMember
 from lxml.etree import _Element
 from oai_repo import MetadataFormat, DataInterface, Identify, RecordHeader, Set, OAIRepoExternalException
-from oai_repo.exceptions import OAIErrorCannotDisseminateFormat, OAIErrorBadArgument
-from oai_repo.helpers import datestamp_long, granularity_format
+from oai_repo.exceptions import OAIErrorCannotDisseminateFormat
+from oai_repo.helpers import granularity_format
 from requests import Session
 from requests_jwtauth import HTTPBearerAuth
 
+from oaipmh.oai import OAIIdentifier
+from oaipmh.solr import Index
 from oaipmh.transformers import load_transformers
 
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(__name__)
-
-BASE_QUERY = 'rdf_type:pcdm\\:Object AND component:* NOT component:Page NOT component:Article AND handle:*'
-SETS = {}
-
-
-class OAIIdentifier:
-    @classmethod
-    def parse(cls, identifier: str):
-        if not identifier.startswith('oai:'):
-            raise ValueError('OAI identifier must start with "oai:"')
-        _, namespace_identifier, local_identifier = identifier.split(':', maxsplit=2)
-        return cls(
-            namespace_identifier=namespace_identifier,
-            local_identifier=urllib.parse.unquote(local_identifier)
-        )
-
-    def __init__(self, namespace_identifier: str, local_identifier: str):
-        self.namespace_identifier = namespace_identifier
-        self.local_identifier = local_identifier
-
-    def __str__(self):
-        return f'oai:{self.namespace_identifier}:{urllib.parse.quote(self.local_identifier)}'
 
 
 class EnvAttribute:
@@ -80,17 +56,11 @@ class DataProvider(DataInterface):
     report_deleted_records = EnvAttribute('REPORT_DELETED_RECORDS', 'no')
     limit: int = EnvAttribute('PAGE_SIZE', 25)
 
-    def __init__(self, solr_client: pysolr.Solr):
-        self.solr = solr_client
-        self.solr_url = self.solr.url
-        self.solr_results: dict[str, dict[str, Any]] = {}
+    def __init__(self, index: Index):
+        self.index = index
         self.session = Session()
         self.session.auth = HTTPBearerAuth(os.environ.get('FCREPO_JWT_TOKEN'))
         self._transformers = load_transformers()
-
-    @property
-    def sets(self) -> dict[str, Set]:
-        return {s.spec: s for s in get_sets(get_collection_titles(self.solr))}
 
     def get_oai_identifier(self, handle: str) -> OAIIdentifier:
         """
@@ -104,38 +74,23 @@ class DataProvider(DataInterface):
             local_identifier=handle,
         )
 
-    def get_solr_doc(self, identifier: str) -> dict[str, Any]:
-        oai_id = OAIIdentifier.parse(identifier)
-        handle = oai_id.local_identifier
-        results = self.solr.search(q=f'handle:{handle}')
-        if not results:
-            raise OAIRepoExternalException(f'Unable to find handle {handle} in Solr')
-        doc = results.docs[0]
-        # cache the resulting doc
-        self.solr_results[str(oai_id)] = doc
-        return doc
-
     def get_uri(self, identifier: str) -> str:
         """
         Given an OAI identifier string, return the URI for the fcrepo resource.
 
         :param identifier: OAI identifier string ("oai:...")
         :return: URI string
-        :raises OAIRepoExternalException:
         """
-        try:
-            return self.solr_results[identifier]['id']
-        except KeyError:
-            # not found in the Solr results, fall back to a new Solr request
-            return self.get_solr_doc(identifier)['id']
+        return self.index.get_doc(identifier)[self.index.uri_field]
 
     def get_last_modified(self, identifier: str) -> datetime:
-        try:
-            last_modified = self.solr_results[identifier]['last_modified']
-        except KeyError:
-            # not found in the Solr results, fall back to a new Solr request
-            last_modified = self.get_solr_doc(identifier)['last_modified']
+        """
+        Given an OAI identifier string, return the last modified time for the fcrepo resource.
 
+        :param identifier: OAI identifier string ("oai:...")
+        :return: datetime object
+        """
+        last_modified = self.index.get_doc(identifier)[self.index.last_modified_field]
         return datetime.fromisoformat(last_modified)
 
     def transform(self, target_format: str, xml_root: _Element) -> _Element:
@@ -174,10 +129,12 @@ class DataProvider(DataInterface):
 
     def get_record_header(self, identifier: str) -> RecordHeader:
         last_modified = self.get_last_modified(identifier)
+        oai_id = OAIIdentifier.parse(identifier)
+        handle = oai_id.local_identifier
         return RecordHeader(
             identifier=identifier,
             datestamp=granularity_format(self.datestamp_granularity, last_modified),
-            # TODO: include setSpec elements
+            setspecs=self.index.get_sets_for_handle(handle),
         )
 
     def get_record_metadata(self, identifier: str, metadataprefix: str) -> _Element | None:
@@ -194,10 +151,12 @@ class DataProvider(DataInterface):
         return []
 
     def list_set_specs(self, identifier: str = None, cursor: int = 0) -> tuple:
-        return self.sets, len(self.sets), None
+        sets = [Set(spec=s['spec'], name=s['name'], description=[]) for s in self.index.get_sets().values()]
+        return sets, len(sets), None
 
     def get_set(self, setspec: str) -> Set:
-        return self.sets[setspec]
+        set_conf = self.index.get_set(setspec)
+        return Set(spec=set_conf['spec'], name=set_conf['name'], description=[])
 
     def list_identifiers(
             self,
@@ -215,49 +174,6 @@ class DataProvider(DataInterface):
             f'filter_set={filter_set}, '
             f'cursor={cursor})'
         )
-        filter_query = BASE_QUERY
-        if filter_from or filter_until:
-            datetime_range = get_solr_date_range(filter_from, filter_until)
-            filter_query += f' AND last_modified:{datetime_range}'
-        if filter_set:
-            if filter_set in self.sets:
-                filter_query += f' AND collection_title_facet:"{self.sets[filter_set].name}"'
-            elif filter_set in SETS:
-                filter_query += f' AND ({SETS[filter_set]["filter"]})'
-            else:
-                raise OAIErrorBadArgument(f"'{filter_set}' is not a valid setSpec value")
-        logger.debug(f'Solr fq = "{filter_query}"')
-        try:
-            results = self.solr.search(q='*:*', fq=filter_query, start=cursor, rows=self.limit)
-        except pysolr.SolrError as e:
-            raise OAIRepoExternalException('Unable to connect to Solr') from e
-        for doc in results:
-            oai_id = self.get_oai_identifier(doc['handle'])
-            self.solr_results[str(oai_id)] = doc
-        identifiers = list(self.solr_results.keys())
+        results = self.index.get_docs(filter_from, filter_until, filter_set, start=cursor, rows=self.limit)
+        identifiers = [str(self.get_oai_identifier(doc[self.index.handle_field])) for doc in results]
         return identifiers, results.hits, None
-
-
-def get_solr_date_range(timestamp_from: Optional[datetime], timestamp_until: Optional[datetime]) -> str:
-    try:
-        datestamp_from = datestamp_long(timestamp_from) if timestamp_from else '*'
-        datestamp_until = datestamp_long(timestamp_until) if timestamp_until else '*'
-    except AttributeError as e:
-        raise TypeError("'timestamp_from' and 'timestamp_until', if present, must be datetime objects") from e
-    return f'[{datestamp_from} TO {datestamp_until}]'
-
-
-def get_set_spec(title: str) -> str:
-    return re.sub('[^a-z0-9]+', '_', title.lower())
-
-
-def get_sets(titles: Iterable[str]) -> list[Set]:
-    return [Set(spec=get_set_spec(title), name=title, description=[]) for title in titles]
-
-
-def get_collection_titles(solr: pysolr.Solr) -> list[str]:
-    try:
-        results = solr.search(q='component:Collection', fl='display_title')
-    except pysolr.SolrError as e:
-        raise OAIRepoExternalException('Unable to connect to Solr') from e
-    return [doc['display_title'] for doc in results]
