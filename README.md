@@ -43,6 +43,9 @@ SOLR_URL=...
 FLASK_DEBUG=1
 ```
 
+For full configuration information, see
+[Configuration](docs/configuration.md).
+
 ### Running
 
 To run the application in debug mode, with hot code reloading:
