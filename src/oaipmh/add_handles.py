@@ -51,7 +51,7 @@ def main(file: TextIO, output: TextIO, config_file: TextIO):
         for row in exports:
             writer.writerow(row)
     except Exception as e:
-        print(str(e), file=sys.stderr)
+        print(f'{type(e).__name__}: {str(e)}', file=sys.stderr)
 
 
 def create_handles(reader: DictReader, config: dict) -> list:
