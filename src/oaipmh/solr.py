@@ -7,7 +7,7 @@ from oai_repo import OAIRepoExternalException
 from oai_repo.exceptions import OAIErrorBadArgument, OAIRepoInternalException
 from oai_repo.helpers import datestamp_long
 
-from oaipmh.oai import get_set_spec, OAIIdentifier
+from oaipmh.oai import get_set_spec
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +34,7 @@ class Index:
 
     @property
     def auto_set_config(self):
-        return self.config.get('auto_set', None)
+        return self.config.get('auto_set', {})
 
     @property
     def base_query(self):
@@ -84,7 +84,8 @@ class Index:
     def get_sets_for_handle(self, handle: str) -> list:
         sets = []
         for set_conf in self.get_sets().values():
-            if self.solr.search(q=f'{self.handle_field}:{handle}', fq=set_conf['filter'], fl=self.uri_field):
+            result = self.solr.search(q=f'{self.handle_field}:{handle}', fq=set_conf['filter'], fl=self.uri_field)
+            if len(result):
                 sets.append(set_conf['spec'])
         return sets
 
@@ -109,11 +110,8 @@ class Index:
 
         return self.search(q='*:*', fq=filter_query, start=start, rows=rows)
 
-    def get_doc(self, identifier: str) -> dict[str, Any]:
-        oai_id = OAIIdentifier.parse(identifier)
-        handle = oai_id.local_identifier
+    def get_doc(self, handle: str) -> dict[str, Any]:
         results = self.search(q=f'{self.handle_field}:{handle}')
-
         if not results:
             raise OAIRepoExternalException(f'Unable to find handle {handle} in Solr')
         return results.docs[0]

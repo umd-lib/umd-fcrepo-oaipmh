@@ -1,7 +1,9 @@
 from datetime import datetime
 from unittest.mock import MagicMock
 
+import pysolr
 import pytest
+from oai_repo import OAIRepoExternalException, OAIRepoInternalException
 
 from oaipmh.solr import solr_date_range, Index, DEFAULT_SOLR_CONFIG
 
@@ -50,7 +52,7 @@ def test_index_accessors(mock_solr_client):
     assert index.uri_field == DEFAULT_SOLR_CONFIG['uri_field']
     assert index.handle_field == DEFAULT_SOLR_CONFIG['handle_field']
     assert index.last_modified_field == DEFAULT_SOLR_CONFIG['last_modified_field']
-    assert index.auto_set_config is None
+    assert len(index.auto_set_config) == 0
     assert len(index.get_sets()) == 0
 
 
@@ -75,6 +77,22 @@ def test_auto_create_sets(mock_solr_client):
     assert sets.keys() == {'foo_collection', 'bar_stuff'}
 
 
+def test_search_solr_error(mock_solr_client):
+    mock_solr_client.search = MagicMock(side_effect=pysolr.SolrError)
+    index = Index(config=DEFAULT_SOLR_CONFIG, solr_client=mock_solr_client)
+    with pytest.raises(OAIRepoExternalException):
+        index.search(q='*:*')
+
+
+def test_get_sets_missing_auto_set_config(mock_solr_client):
+    index = Index(
+        config={**DEFAULT_SOLR_CONFIG, 'auto_create_sets': True},
+        solr_client=mock_solr_client,
+    )
+    with pytest.raises(OAIRepoInternalException):
+        index.get_sets()
+
+
 def test_get_set(mock_solr_client):
     index = Index(
         config={**DEFAULT_SOLR_CONFIG, 'sets': [{'spec': 'foo', 'name': 'Foo!', 'filter': 'title:Foo'}]},
@@ -84,3 +102,21 @@ def test_get_set(mock_solr_client):
     assert set_conf['spec'] == 'foo'
     assert set_conf['name'] == 'Foo!'
     assert set_conf['filter'] == 'title:Foo'
+
+
+def test_get_sets_for_handle(mock_solr_client):
+    mock_solr_client.search = MagicMock(side_effect=[[], {'id': 'bar'}, []])
+    index = Index(
+        config={
+            **DEFAULT_SOLR_CONFIG,
+            'sets': [
+                {'spec': 'foo', 'name': 'Foo!', 'filter': 'title:Foo'},
+                {'spec': 'bar', 'name': 'Bar!', 'filter': 'title:Bar'},
+                {'spec': 'baz', 'name': 'Baz!', 'filter': 'title:Baz'},
+            ],
+        },
+        solr_client=mock_solr_client,
+    )
+    sets = index.get_sets_for_handle('some/handle')
+    assert len(sets) == 1
+    assert sets == ['bar']

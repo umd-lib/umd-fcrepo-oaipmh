@@ -81,7 +81,8 @@ class DataProvider(DataInterface):
         :param identifier: OAI identifier string ("oai:...")
         :return: URI string
         """
-        return self.index.get_doc(identifier)[self.index.uri_field]
+        handle = OAIIdentifier.parse(identifier).local_identifier
+        return self.index.get_doc(handle)[self.index.uri_field]
 
     def get_last_modified(self, identifier: str) -> datetime:
         """
@@ -90,7 +91,8 @@ class DataProvider(DataInterface):
         :param identifier: OAI identifier string ("oai:...")
         :return: datetime object
         """
-        last_modified = self.index.get_doc(identifier)[self.index.last_modified_field]
+        handle = OAIIdentifier.parse(identifier).local_identifier
+        last_modified = self.index.get_doc(handle)[self.index.last_modified_field]
         return datetime.fromisoformat(last_modified)
 
     def transform(self, target_format: str, xml_root: _Element) -> _Element:
@@ -151,8 +153,12 @@ class DataProvider(DataInterface):
         return []
 
     def list_set_specs(self, identifier: str = None, cursor: int = 0) -> tuple:
-        sets = [Set(spec=s['spec'], name=s['name'], description=[]) for s in self.index.get_sets().values()]
-        return sets, len(sets), None
+        if identifier:
+            oai_id = OAIIdentifier.parse(identifier)
+            set_specs = self.index.get_sets_for_handle(oai_id.local_identifier)
+        else:
+            set_specs = self.index.get_sets().keys()
+        return set_specs, len(set_specs), None
 
     def get_set(self, setspec: str) -> Set:
         set_conf = self.index.get_set(setspec)

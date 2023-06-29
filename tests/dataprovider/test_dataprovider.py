@@ -1,9 +1,8 @@
 from unittest.mock import MagicMock
 
-import pysolr
 import pytest
 from lxml import etree
-from oai_repo import Set
+from oai_repo import Set, RecordHeader
 from oai_repo.exceptions import OAIErrorCannotDisseminateFormat, OAIRepoExternalException
 
 from oaipmh.dataprovider import DataProvider
@@ -124,14 +123,6 @@ def test_handle_not_found(provider):
         provider.get_record_header('oai:fcrepo:foo')
 
 
-class MockSolrResults:
-    docs = [
-    ]
-
-    def __iter__(self):
-        return iter(self.docs)
-
-
 def test_get_record_header(mock_solr_client):
     mock_index = Index(config=DEFAULT_SOLR_CONFIG, solr_client=mock_solr_client)
     mock_index.get_doc = MagicMock(
@@ -142,6 +133,7 @@ def test_get_record_header(mock_solr_client):
     )
     provider = DataProvider(index=mock_index)
     header = provider.get_record_header('oai:fcrepo:foo')
+    assert isinstance(header, RecordHeader)
     assert header.identifier == 'oai:fcrepo:foo'
     assert header.datestamp == '2023-06-16T08:37:29Z'
 
@@ -161,7 +153,7 @@ def test_list_set_specs(index_with_defaults):
     })
     provider = DataProvider(index=index_with_defaults)
     sets, length, _ = provider.list_set_specs()
-    assert all(isinstance(s, Set) for s in sets)
+    assert sets == {'foo', 'bar'}
     assert length == 2
 
 
@@ -180,6 +172,7 @@ def test_get_sets(index_with_defaults):
     })
     provider = DataProvider(index=index_with_defaults)
     oai_set = provider.get_set('bar')
+    assert isinstance(oai_set, Set)
     assert oai_set.spec == 'bar'
     assert oai_set.name == 'Bar'
     assert oai_set.description == []
