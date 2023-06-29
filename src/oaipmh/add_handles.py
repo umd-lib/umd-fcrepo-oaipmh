@@ -9,6 +9,14 @@ from oaipmh import __version__
 from typing import TextIO
 
 
+class RequestFailure(Exception):
+    def __init__(self, message):
+        self.message = message
+
+    def __str__(self):
+        return self.message
+
+
 @click.command()
 @click.option(
     '--file', '-f',
@@ -31,48 +39,65 @@ from typing import TextIO
 @click.version_option(__version__, '--version', '-V')
 @click.help_option('--help', '-h')
 def main(file: TextIO, output: TextIO, config_file: TextIO):
-    config = yaml.safe_load(config_file)
-    reader = DictReader(file, delimiter=',')
-    exports = create_handles(reader, config)
+    try:
+        config = yaml.safe_load(config_file)
+        reader = DictReader(file, delimiter=',')
+        exports = create_handles(reader, config)
 
-    # Write out to file or stdout
-    fieldnames = reader.fieldnames + ['Handle']
-    writer = DictWriter(output, fieldnames=fieldnames)
-    writer.writeheader()
-    for row in exports:
-        writer.writerow(row)
+        # Write out to file or stdout
+        fieldnames = reader.fieldnames + ['Handle']
+        writer = DictWriter(output, fieldnames=fieldnames)
+        writer.writeheader()
+        for row in exports:
+            writer.writerow(row)
+    except Exception as e:
+        print(str(e), file=sys.stderr)
 
 
 def create_handles(reader: DictReader, config: dict) -> list:
     exports = []
     for row in reader:
         if 'Handle' not in row or row['Handle'] is None:
-            # extract relpath and uuid from fcrepo URI
-            relpath, item_uuid = extract_from_url(row['URI'], config)
+            fcrepo_path = row['URI'].replace(config['BASE_URL'], '')
+
+            # extract relpath and uuid from fcrepo path
+            relpath, item_uuid = extract_from_url(fcrepo_path)
 
             # create url for http request
             public_url = config['PUBLIC_BASE_URL'] + item_uuid + f"?relpath={relpath}"
 
             # Send http Request to Umd-Handle-API to mint handle
-            handle = mint_handle(public_url, config)
+            handle = mint_handle(config,
+                                 prefix='1903.1',
+                                 url=public_url,
+                                 repo='fcrepo',
+                                 repo_id=fcrepo_path
+                                 )
 
             # Store handle
             row['Handle'] = handle
             exports.append(row)
 
+    return exports
 
-def extract_from_url(fcrepo_url: str, config: dict) -> tuple[str, str]:
-    base_removed = fcrepo_url.replace(config['BASE_URL'], '')
-    url_split = base_removed.split('/')
+
+def extract_from_url(fcrepo_path: str) -> tuple[str, str]:
+    path_split = fcrepo_path.split('/')
 
     # Remove base, then get relpath and uuid
-    relpath = url_split[:3]
-    item_uuid = url_split[-1]
+    relpath = '/'.join(path_split[:3])
+    item_uuid = path_split[-1]
     return relpath, item_uuid
 
 
-def mint_handle(public_url: str, config: dict) -> str:
-    endpoint = '/handle'
+def mint_handle(config: dict, **json) -> str:
+    endpoint = '/api/v1/handles'
+    headers = {'Authorization': f'Bearer {config["AUTH"]}'}
+    response = requests.post(config['HANDLE_URL'] + endpoint, json=json, headers=headers)
 
-    results = requests.post(config['HANDLE_URL'] + endpoint)
-    return public_url
+    if response.status_code != 200:
+        raise RequestFailure(f"Got a {response.status_code} error code, check the configuration file.")
+
+    handle = response.json().get('handle_url')
+
+    return handle
