@@ -77,6 +77,8 @@ def create_handles(reader: DictReader, config: dict) -> list:
             # Store handle
             row['Handle'] = handle
             exports.append(row)
+        else:
+            exports.append(row)
 
     return exports
 
