@@ -51,9 +51,8 @@
   </xsl:template>
 
   <!-- identifier -->
-  <xsl:template match="rdf:Description">
-    <dc:identifier><xsl:value-of select="@rdf:about"/></dc:identifier>
-    <xsl:apply-templates/>
+  <xsl:template match="dcterms:identifier">
+    <dc:identifier><xsl:value-of select="."/></dc:identifier>
   </xsl:template>
 
   <!-- language -->
