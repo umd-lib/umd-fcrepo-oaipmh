@@ -90,7 +90,7 @@ def extract_from_url(fcrepo_path: str) -> tuple[str, str]:
 
 
 def mint_handle(config: dict, **json) -> str:
-    endpoint = '/api/v1/handles'
+    endpoint = '/handles'
     headers = {'Authorization': f'Bearer {config["AUTH"]}'}
     response = requests.post(config['HANDLE_URL'] + endpoint, json=json, headers=headers)
 
