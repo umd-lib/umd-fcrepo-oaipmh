@@ -1,4 +1,5 @@
 import logging
+import re
 import click
 import requests
 import sys
@@ -64,7 +65,7 @@ def create_handles(reader: DictReader, config: dict) -> list:
             fcrepo_path = row['URI'].replace(config['BASE_URL'], '')
 
             # extract relpath and uuid from fcrepo path
-            relpath, item_uuid = extract_from_url(fcrepo_path)
+            relpath, item_uuid = extract_from_path(fcrepo_path)
 
             # create url for http request
             public_url = config['PUBLIC_BASE_URL'] + item_uuid + f"?relpath={relpath}"
@@ -86,12 +87,15 @@ def create_handles(reader: DictReader, config: dict) -> list:
     return exports
 
 
-def extract_from_url(fcrepo_path: str) -> tuple[str, str]:
-    path_split = fcrepo_path.split('/')
+PATH_PATTERN = re.compile(r'(.*?)/(..)/(..)/(..)/(..)/(\2\3\4\5-....-....-....-............)')
 
-    # Remove base, then get relpath and uuid
-    relpath = '/'.join(path_split[:3])
-    item_uuid = path_split[-1]
+
+def extract_from_path(fcrepo_path: str) -> tuple[str, str]:
+    matches = PATH_PATTERN.match(fcrepo_path)
+    if not matches:
+        raise RuntimeError(f'Unable to extract relpath and uuid from {fcrepo_path}')
+    relpath = matches[1]
+    item_uuid = matches[6]
     return relpath, item_uuid
 
 
