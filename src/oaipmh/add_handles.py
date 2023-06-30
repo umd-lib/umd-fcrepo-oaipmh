@@ -1,32 +1,32 @@
+import logging
+import re
+import sys
+from csv import DictReader, DictWriter
+from typing import TextIO
+
 import click
 import requests
-import sys
-import uuid
 import yaml
 
-from csv import DictReader, DictWriter
 from oaipmh import __version__
-from typing import TextIO
+
+logger = logging.getLogger(__name__)
 
 
 class RequestFailure(Exception):
-    def __init__(self, message):
-        self.message = message
-
-    def __str__(self):
-        return self.message
+    pass
 
 
 @click.command()
 @click.option(
-    '--file', '-f',
-    help='The export file to take in and add handles to.',
+    '--input-file', '-i',
+    help='The CSV export file to take in and add handles to. Defaults to STDIN.',
+    default=sys.stdin,
     type=click.File(),
-    required=True
 )
 @click.option(
-    '--output', '-o',
-    help='Output for the handles, will default to stdout.',
+    '--output-file', '-o',
+    help='Output file for CSV file with handles. Defaults to STDOUT.',
     default=sys.stdout,
     type=click.File(mode='w'),
 )
@@ -38,20 +38,24 @@ class RequestFailure(Exception):
 )
 @click.version_option(__version__, '--version', '-V')
 @click.help_option('--help', '-h')
-def main(file: TextIO, output: TextIO, config_file: TextIO):
+def main(input_file: TextIO, output_file: TextIO, config_file: TextIO):
     try:
         config = yaml.safe_load(config_file)
-        reader = DictReader(file, delimiter=',')
+        reader = DictReader(input_file)
         exports = create_handles(reader, config)
 
+        # ensure that there is a Handle header in the output file
+        fieldnames = list(reader.fieldnames)
+        if 'Handle' not in fieldnames:
+            fieldnames.append('Handle')
+
         # Write out to file or stdout
-        fieldnames = reader.fieldnames + ['Handle']
-        writer = DictWriter(output, fieldnames=fieldnames)
+        writer = DictWriter(output_file, fieldnames=fieldnames)
         writer.writeheader()
         for row in exports:
             writer.writerow(row)
-    except Exception as e:
-        print(f'{type(e).__name__}: {str(e)}', file=sys.stderr)
+    except RequestFailure as e:
+        logger.error(str(e))
 
 
 def create_handles(reader: DictReader, config: dict) -> list:
@@ -61,7 +65,7 @@ def create_handles(reader: DictReader, config: dict) -> list:
             fcrepo_path = row['URI'].replace(config['BASE_URL'], '')
 
             # extract relpath and uuid from fcrepo path
-            relpath, item_uuid = extract_from_url(fcrepo_path)
+            relpath, item_uuid = extract_from_path(fcrepo_path)
 
             # create url for http request
             public_url = config['PUBLIC_BASE_URL'] + item_uuid + f"?relpath={relpath}"
@@ -83,17 +87,20 @@ def create_handles(reader: DictReader, config: dict) -> list:
     return exports
 
 
-def extract_from_url(fcrepo_path: str) -> tuple[str, str]:
-    path_split = fcrepo_path.split('/')
+PATH_PATTERN = re.compile(r'(.*?)/(..)/(..)/(..)/(..)/(\2\3\4\5-....-....-....-............)')
 
-    # Remove base, then get relpath and uuid
-    relpath = '/'.join(path_split[:3])
-    item_uuid = path_split[-1]
+
+def extract_from_path(fcrepo_path: str) -> tuple[str, str]:
+    matches = PATH_PATTERN.match(fcrepo_path)
+    if not matches:
+        raise RuntimeError(f'Unable to extract relpath and uuid from {fcrepo_path}')
+    relpath = matches[1]
+    item_uuid = matches[6]
     return relpath, item_uuid
 
 
 def mint_handle(config: dict, **json) -> str:
-    endpoint = '/api/v1/handles'
+    endpoint = '/handles'
     headers = {'Authorization': f'Bearer {config["AUTH"]}'}
     response = requests.post(config['HANDLE_URL'] + endpoint, json=json, headers=headers)
 
