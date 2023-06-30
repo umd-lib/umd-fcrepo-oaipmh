@@ -43,8 +43,12 @@ def main(input_file: TextIO, output_file: TextIO, config_file: TextIO):
         reader = DictReader(input_file)
         exports = create_handles(reader, config)
 
+        # ensure that there is a Handle header in the output file
+        fieldnames = list(reader.fieldnames)
+        if 'Handle' not in fieldnames:
+            fieldnames.append('Handle')
+
         # Write out to file or stdout
-        fieldnames = reader.fieldnames + ['Handle']
         writer = DictWriter(output_file, fieldnames=fieldnames)
         writer.writeheader()
         for row in exports:
