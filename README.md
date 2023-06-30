@@ -43,6 +43,21 @@ SOLR_URL=...
 FLASK_DEBUG=1
 ```
 
+And create a `solr_conf.yml` file with the following contents:
+
+```yaml
+base_query: handle:*
+handle_field: handle
+uri_field: id
+last_modified_field: last_modified
+auto_create_sets: True
+auto_set:
+  query: component:Collection
+  name_field: display_title
+  name_query_field: collection_title_facet
+sets: []
+```
+
 For full configuration information, see
 [Configuration](docs/configuration.md).
 
@@ -51,7 +66,7 @@ For full configuration information, see
 To run the application in debug mode, with hot code reloading:
 
 ```bash
-flask --app oaipmh.web:create_app run
+flask --app "oaipmh.web:create_app(solr_config_file='solr_conf.yml')" run
 ```
 
 The application will be available at <http://localhost:5000/>
@@ -68,7 +83,7 @@ And add `-p {port number}` to the `flask` command:
 
 ```bash
 # for example, to run on port 8000
-flask --app oaipmh.web:create_app run -p 8000
+flask --app "oaipmh.web:create_app(solr_config_file='solr_conf.yml')" run -p 8000
 ```
 
 ### Testing
