@@ -9,12 +9,9 @@ from oaipmh import __version__
 from typing import TextIO
 
 
-class RequestFailure(Exception):
-    def __init__(self, message):
-        self.message = message
 
-    def __str__(self):
-        return self.message
+class RequestFailure(Exception):
+    pass
 
 
 @click.command()
