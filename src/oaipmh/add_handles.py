@@ -1,3 +1,4 @@
+import logging
 import click
 import requests
 import sys
@@ -8,6 +9,7 @@ from csv import DictReader, DictWriter
 from oaipmh import __version__
 from typing import TextIO
 
+logger = logging.getLogger(__name__)
 
 
 class RequestFailure(Exception):
@@ -47,8 +49,8 @@ def main(input_file: TextIO, output_file: TextIO, config_file: TextIO):
         writer.writeheader()
         for row in exports:
             writer.writerow(row)
-    except Exception as e:
-        print(f'{type(e).__name__}: {str(e)}', file=sys.stderr)
+    except RequestFailure as e:
+        logger.error(str(e))
 
 
 def create_handles(reader: DictReader, config: dict) -> list:
