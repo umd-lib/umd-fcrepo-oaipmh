@@ -20,3 +20,4 @@ test = [
 ]
 [project.scripts]
 fcrepo-oaipmh-server = "oaipmh.server:run"
+add-handles = "oaipmh.add_handles:main"
