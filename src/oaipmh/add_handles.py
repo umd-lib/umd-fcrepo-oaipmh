@@ -1,14 +1,14 @@
 import logging
 import re
+import sys
+from csv import DictReader, DictWriter
+from typing import TextIO
+
 import click
 import requests
-import sys
-import uuid
 import yaml
 
-from csv import DictReader, DictWriter
 from oaipmh import __version__
-from typing import TextIO
 
 logger = logging.getLogger(__name__)
 
