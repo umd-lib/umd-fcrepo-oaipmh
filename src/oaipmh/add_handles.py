@@ -16,14 +16,14 @@ class RequestFailure(Exception):
 
 @click.command()
 @click.option(
-    '--file', '-f',
-    help='The export file to take in and add handles to.',
+    '--input-file', '-i',
+    help='The CSV export file to take in and add handles to. Defaults to STDIN.',
+    default=sys.stdin,
     type=click.File(),
-    required=True
 )
 @click.option(
-    '--output', '-o',
-    help='Output for the handles, will default to stdout.',
+    '--output-file', '-o',
+    help='Output file for CSV file with handles. Defaults to STDOUT.',
     default=sys.stdout,
     type=click.File(mode='w'),
 )
@@ -35,15 +35,15 @@ class RequestFailure(Exception):
 )
 @click.version_option(__version__, '--version', '-V')
 @click.help_option('--help', '-h')
-def main(file: TextIO, output: TextIO, config_file: TextIO):
+def main(input_file: TextIO, output_file: TextIO, config_file: TextIO):
     try:
         config = yaml.safe_load(config_file)
-        reader = DictReader(file, delimiter=',')
+        reader = DictReader(input_file)
         exports = create_handles(reader, config)
 
         # Write out to file or stdout
         fieldnames = reader.fieldnames + ['Handle']
-        writer = DictWriter(output, fieldnames=fieldnames)
+        writer = DictWriter(output_file, fieldnames=fieldnames)
         writer.writeheader()
         for row in exports:
             writer.writerow(row)
