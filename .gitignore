@@ -3,3 +3,4 @@
 .env
 .venv
 solr_conf.yml
+handle_conf.yml
