@@ -155,7 +155,7 @@ class DataProvider(DataInterface):
     def list_set_specs(self, identifier: str = None, cursor: int = 0) -> tuple:
         if identifier:
             oai_id = OAIIdentifier.parse(identifier)
-            set_specs = self.index.get_sets_for_handle(oai_id.local_identifier)
+            set_specs = self.index.get_sets_for_handle(oai_id.local_identifier).keys()
         else:
             set_specs = self.index.get_sets().keys()
         return set_specs, len(set_specs), None

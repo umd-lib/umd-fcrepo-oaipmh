@@ -81,12 +81,12 @@ class Index:
     def get_set(self, spec: str) -> dict[str, str]:
         return self.get_sets()[spec]
 
-    def get_sets_for_handle(self, handle: str) -> list:
-        sets = []
-        for set_conf in self.get_sets().values():
+    def get_sets_for_handle(self, handle: str) -> dict[str, dict[str, str]]:
+        sets = {}
+        for set_spec, set_conf in self.get_sets().items():
             result = self.solr.search(q=f'{self.handle_field}:{handle}', fq=set_conf['filter'], fl=self.uri_field)
             if len(result):
-                sets.append(set_conf['spec'])
+                sets[set_spec] = set_conf
         return sets
 
     def get_docs(

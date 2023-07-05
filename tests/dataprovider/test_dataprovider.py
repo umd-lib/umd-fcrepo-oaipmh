@@ -151,10 +151,21 @@ def test_list_set_specs(index_with_defaults):
             'filter': 'collection_title_facet:Bar',
         },
     })
+    index_with_defaults.get_sets_for_handle = MagicMock(return_value={
+        'bar': {
+            'spec': 'bar',
+            'name': 'Bar',
+            'filter': 'collection_title_facet:Bar',
+        },
+    })
     provider = DataProvider(index=index_with_defaults)
     sets, length, _ = provider.list_set_specs()
     assert sets == {'foo', 'bar'}
     assert length == 2
+
+    sets, length, _ = provider.list_set_specs(identifier='oai:fcrepo-test:foo')
+    assert sets == {'bar'}
+    assert length == 1
 
 
 def test_get_sets(index_with_defaults):

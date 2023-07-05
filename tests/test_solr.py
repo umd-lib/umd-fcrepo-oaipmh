@@ -119,4 +119,4 @@ def test_get_sets_for_handle(mock_solr_client):
     )
     sets = index.get_sets_for_handle('some/handle')
     assert len(sets) == 1
-    assert sets == ['bar']
+    assert sets.keys() == {'bar'}
