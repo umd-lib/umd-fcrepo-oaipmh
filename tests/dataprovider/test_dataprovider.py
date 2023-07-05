@@ -226,3 +226,28 @@ def test_get_record_metadata_not_found(provider):
         provider.get_record_metadata('oai:fcrepo:foo', 'oai_dc')
 
     assert str(e.value) == 'Unable to retrieve resource from fcrepo'
+
+
+class MockSolrResult:
+    @property
+    def hits(self):
+        return len(list(self))
+
+    def __iter__(self):
+        return iter([
+            {'handle': '1903.1/sample1'},
+            {'handle': '1903.1/sample2'},
+            {'handle': '1903.1/sample3'},
+        ])
+
+
+def test_list_identifiers(monkeypatch, provider, mock_solr_client):
+    monkeypatch.setenv('OAI_NAMESPACE_IDENTIFIER', 'fcrepo')
+    mock_solr_client.search = MagicMock(return_value=MockSolrResult())
+    identifiers, hits, _ = provider.list_identifiers(metadataprefix='oai_dc')
+    assert hits == 3
+    assert identifiers == [
+        'oai:fcrepo:1903.1/sample1',
+        'oai:fcrepo:1903.1/sample2',
+        'oai:fcrepo:1903.1/sample3',
+    ]

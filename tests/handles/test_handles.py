@@ -22,3 +22,8 @@ def test_extract(fcrepo_path, expected_relpath, expected_uuid):
     relpath, uuid = extract_from_path(fcrepo_path)
     assert relpath == expected_relpath
     assert uuid == expected_uuid
+
+
+def test_extract_failure():
+    with pytest.raises(RuntimeError):
+        extract_from_path('/foo/bar/no/pairtree')
