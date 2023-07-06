@@ -4,7 +4,7 @@ from typing import Any, Optional, TextIO
 
 import pysolr
 import yaml
-from flask import Flask, request, abort
+from flask import Flask, request, abort, redirect, url_for
 from oai_repo import OAIRepository, OAIRepoInternalException, OAIRepoExternalException
 from oai_repo.response import OAIResponse
 
@@ -48,20 +48,24 @@ def create_app(solr_config_file) -> Flask:
     app.logger.debug(f'Initialized the data provider: {data_provider.get_identify()}')
 
     @app.route('/')
+    def root():
+        return redirect(url_for('home'))
+
+    @app.route('/oai')
     def home():
-        endpoint_url = data_provider.base_url + 'oai'
+        identify_url = data_provider.base_url + '?verb=Identify'
         return f"""
         <h1>OAI-PMH Service for Fedora: {data_provider.oai_repository_name}</h1>
         <ul>
           <li>Version: umd-fcrepo-oaipmh/{__version__}</li>
-          <li>Endpoint: {endpoint_url}</li>
-          <li>Identify: <a href="{endpoint_url}?verb=Identify">{endpoint_url}?verb=Identify</a></li>
+          <li>Endpoint: {data_provider.base_url}</li>
+          <li>Identify: <a href="{identify_url}">{identify_url}</a></li>
         </ul>
         <p>See the <a href="http://www.openarchives.org/OAI/openarchivesprotocol.html" target="_blank">OAI-PMH
         Protocol 2.0 Specification</a> for information about how to use this service.</p>
         """
 
-    @app.route('/oai')
+    @app.route('/oai/api')
     def endpoint():
         try:
             repo = OAIRepository(data_provider)
