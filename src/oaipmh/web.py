@@ -5,6 +5,9 @@ from typing import Any, Optional, TextIO
 import pysolr
 import yaml
 from flask import Flask, request, abort, redirect, url_for
+from lxml import etree
+# noinspection PyProtectedMember
+from lxml.etree import ElementTree, _ElementTree
 from oai_repo import OAIRepository, OAIRepoInternalException, OAIRepoExternalException
 from oai_repo.response import OAIResponse
 
@@ -38,7 +41,10 @@ def get_config(config_source: Optional[str | TextIO] = None) -> dict[str, Any]:
 
 
 def create_app(solr_config_file) -> Flask:
-    app = Flask(__name__)
+    app = Flask(
+        import_name=__name__,
+        static_url_path='/oai/static',
+    )
     app.logger.info(f'Starting umd-fcrepo-oaipmh/{__version__}')
     index = Index(
         config=get_config(solr_config_file),
@@ -46,6 +52,7 @@ def create_app(solr_config_file) -> Flask:
     )
     data_provider = DataProvider(index=index)
     app.logger.debug(f'Initialized the data provider: {data_provider.get_identify()}')
+    use_xsl_stylesheet = bool(os.environ.get('XSL_STYLESHEET'))
 
     @app.route('/')
     def root():
@@ -81,6 +88,14 @@ def create_app(solr_config_file) -> Flask:
             app.logger.error(f'Internal error: {e}')
             abort(HTTPStatus.INTERNAL_SERVER_ERROR)
         else:
-            return bytes(response).decode(), status(response), {'Content-Type': 'application/xml'}
+            document: _ElementTree = ElementTree(response.root())
+            if use_xsl_stylesheet:
+                stylesheet = etree.ProcessingInstruction('xml-stylesheet', 'type="text/xsl" href="static/html.xsl"')
+                document.getroot().addprevious(stylesheet)
+            return (
+                etree.tostring(document, xml_declaration=True, encoding='UTF-8', pretty_print=True),
+                status(response),
+                {'Content-Type': 'application/xml'},
+            )
 
     return app

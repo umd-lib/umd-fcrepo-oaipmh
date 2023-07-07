@@ -1,0 +1,27 @@
+dl {
+    display: grid;
+    grid-template-areas: "key value";
+    grid-template-columns: auto 1fr;
+}
+dt, dd {
+    line-height: 1.5;
+    border: 1px solid #ddd;
+    margin: 0;
+    padding: .25em .5em;
+}
+li { margin-bottom: 1em; }
+.buttons {
+    display: inline-block;
+    margin-left: 1em;
+}
+button {
+    margin: 0 0.5em;
+    cursor: pointer;
+}
+.response-date {
+    font-style: italic;
+}
+pre { line-height: 1.5; font-size: 110%; background: #eee; border: 1px solid #ccc; white-space: pre-wrap; }
+.element { color: green; opacity: .5; font-weight: bold; }
+.attribute-name { color: red; opacity: .5; }
+.attribute-value { color: blue; opacity: .75; }
