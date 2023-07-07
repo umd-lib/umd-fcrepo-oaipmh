@@ -69,14 +69,15 @@ To run the application in debug mode, with hot code reloading:
 flask --app "oaipmh.web:create_app(solr_config_file='solr_conf.yml')" run
 ```
 
-The application will be available at <http://localhost:5000/>
+The OAI-PMH service will be available at <http://localhost:5000/oai/api>, 
+with a simple HTML landing page at <http://localhost:5000/oai>.
 
 To change the port, add a `BASE_URL` environment variable to the `.env` file:
 
 ```bash
 # set when using a URL and/or port other than 
 # the defaults ("localhost" and "5000")
-BASE_URL=http://localhost:8000/
+BASE_URL=http://localhost:8000/oai/api
 ```
 
 And add `-p {port number}` to the `flask` command:
